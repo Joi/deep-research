@@ -16,7 +16,10 @@ def make_client(provider):
         return None                                # no SDK client; subprocess handles auth
     if provider.api_type == "anthropic":
         import anthropic
-        return anthropic.Anthropic(api_key=provider.api_key)
+        kwargs = {"api_key": provider.api_key}
+        if provider.base_url:                      # anthropic-compatible endpoints (e.g. z.ai GLM)
+            kwargs["base_url"] = provider.base_url
+        return anthropic.Anthropic(**kwargs)
     if provider.api_type == "gemini":
         from google import genai
         return genai.Client(api_key=provider.api_key)

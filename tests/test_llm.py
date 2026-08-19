@@ -50,6 +50,17 @@ def test_complete_anthropic_uses_max_tokens_no_base_url():
     assert client.kwargs["system"] == "SYS"
     assert all(m["role"] != "system" for m in client.kwargs["messages"])
 
+def test_make_client_anthropic_honors_base_url():
+    prov = config.Provider("glm", "anthropic", "k", "glm-5.2",
+                           base_url="https://api.z.ai/api/anthropic")
+    client = llm.make_client(prov)
+    assert str(client.base_url).startswith("https://api.z.ai/api/anthropic")
+
+def test_make_client_anthropic_default_base_url_when_unset():
+    prov = config.Provider("claude", "anthropic", "k", "claude-opus-4-20250514")
+    client = llm.make_client(prov)
+    assert "api.anthropic.com" in str(client.base_url)
+
 def test_complete_gemini_uses_max_output_tokens_and_walks_fallback():
     prov = config.Provider("g", "gemini", "k", "gemini-2.5-pro", max_tokens=65536,
                            fallback_models=("gemini-2.5-flash",))
