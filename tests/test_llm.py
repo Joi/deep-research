@@ -2,11 +2,13 @@ import config, llm
 
 class FakeChat:
     def __init__(self): self.kwargs = None
+    _citations = None
     class _Msg:
-        def __init__(self, content): self.message = type("M", (), {"content": content})
+        def __init__(self, content, citations=None):
+            self.message = type("M", (), {"content": content, "citations": citations})
     def create(self, **kw):
         self.kwargs = kw
-        return type("R", (), {"choices": [FakeChat._Msg("OPENAI-REPORT")]})
+        return type("R", (), {"choices": [FakeChat._Msg("OPENAI-REPORT", self._citations)]})
 
 class FakeOpenAI:
     def __init__(self): self.chat = type("C", (), {"completions": FakeChat()})()
@@ -60,6 +62,14 @@ def test_make_client_anthropic_default_base_url_when_unset():
     prov = config.Provider("claude", "anthropic", "k", "claude-opus-4-20250514")
     client = llm.make_client(prov)
     assert "api.anthropic.com" in str(client.base_url)
+
+def test_complete_openai_appends_citations_when_present():
+    prov = config.Provider("exa", "openai", "k", "exa", max_tokens=4096)
+    client = FakeOpenAI()
+    client.chat.completions._citations = ["https://a.example/1", "https://b.example/2"]
+    text = llm._complete_openai(client, prov, "SYS", "PROMPT")
+    assert "OPENAI-REPORT" in text
+    assert "https://a.example/1" in text and "Sources:" in text
 
 def test_complete_gemini_uses_max_output_tokens_and_walks_fallback():
     prov = config.Provider("g", "gemini", "k", "gemini-2.5-pro", max_tokens=65536,

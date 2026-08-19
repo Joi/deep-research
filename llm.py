@@ -43,7 +43,15 @@ def _complete_openai(client, provider, system_prompt, user_prompt):
     )
     if not resp.choices or not resp.choices[0].message.content:
         raise RuntimeError(f"provider '{provider.name}' returned an empty response")
-    return resp.choices[0].message.content
+    text = resp.choices[0].message.content
+    # Some OpenAI-compatible search providers (e.g. Exa) return grounding URLs in a
+    # non-standard `citations` field; dropping them would strip the report's sources.
+    citations = getattr(resp.choices[0].message, "citations", None)
+    if citations:
+        urls = [str(c) for c in citations if c]
+        if urls:
+            text += "\n\nSources:\n" + "\n".join(f"- {u}" for u in urls)
+    return text
 
 
 def _complete_anthropic(client, provider, system_prompt, user_prompt):
@@ -113,6 +121,8 @@ def _complete_cli(client, provider, system_prompt, user_prompt):
     argv, stdin_text = _cli_argv_and_input(provider, system_prompt, user_prompt)
     env = dict(os.environ)
     env.pop("ANTHROPIC_API_KEY", None)   # force subscription auth, not metered API
+    env.pop("ANTHROPIC_AUTH_TOKEN", None)  # gateway tokens take precedence over subscription
+    env.pop("ANTHROPIC_BASE_URL", None)    # and a gateway base URL would misroute the call
     env.pop("OPENAI_API_KEY", None)
     proc = subprocess.run(argv, input=stdin_text, capture_output=True, text=True,
                           env=env, timeout=CLI_TIMEOUT_S)
