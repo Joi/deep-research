@@ -3,12 +3,14 @@ import config, llm
 class FakeChat:
     def __init__(self): self.kwargs = None
     _citations = None
-    class _Msg:
-        def __init__(self, content, citations=None):
-            self.message = type("M", (), {"content": content, "citations": citations})
     def create(self, **kw):
         self.kwargs = kw
-        return type("R", (), {"choices": [FakeChat._Msg("OPENAI-REPORT", self._citations)]})
+        # emulate a streaming response: two content chunks, citations on the last
+        def chunk(content, citations=None):
+            delta = type("D", (), {"content": content})
+            choice = type("Ch", (), {"delta": delta})
+            return type("K", (), {"choices": [choice], "citations": citations})
+        return iter([chunk("OPENAI-"), chunk("REPORT", self._citations)])
 
 class FakeOpenAI:
     def __init__(self): self.chat = type("C", (), {"completions": FakeChat()})()
@@ -135,7 +137,9 @@ def test_complete_gemini_non_overload_propagates_immediately():
 def test_complete_openai_empty_response_raises():
     class _EmptyChat:
         def create(self, **kw):
-            return type("R", (), {"choices": [type("C", (), {"message": type("M", (), {"content": None})})]})
+            delta = type("D", (), {"content": None})
+            choice = type("Ch", (), {"delta": delta})
+            return iter([type("K", (), {"choices": [choice], "citations": None})])
     client = type("X", (), {"chat": type("Y", (), {"completions": _EmptyChat()})()})()
     prov = config.Provider("p", "openai", "k", "m")
     import pytest
@@ -156,7 +160,7 @@ def test_complete_anthropic_empty_content_list_raises():
 
 def test_complete_openai_empty_choices_raises():
     class _Chat:
-        def create(self, **kw): return type("R", (), {"choices": []})
+        def create(self, **kw): return iter([type("K", (), {"choices": [], "citations": None})])
     client = type("X", (), {"chat": type("Y", (), {"completions": _Chat()})()})()
     prov = config.Provider("p", "openai", "k", "m")
     import pytest
